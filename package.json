@@ -1,7 +1,7 @@
 {
-  "name": "MultiSigWallet",
+  "name": "Wallet",
   "version": "0.0.1",
-  "description": "MultiSigWallet",
+  "description": "Wallet",
   "author": "Ignacio Palacios",
   "license": "ISC",
   "devDependencies": {
