@@ -1,0 +1,17 @@
+{
+  "name": "MultiSigWallet",
+  "version": "0.0.1",
+  "description": "MultiSigWallet",
+  "author": "Ignacio Palacios",
+  "license": "ISC",
+  "devDependencies": {
+    "truffle": "5.0.1",
+    "ganache-cli": "6.1.6",
+    "chai-as-promised": "7.1.1",
+    "chai": "4.2.0"
+  },
+  "scripts": {
+    "chain": "ganache-cli -m 'must discover obtain pause attract prepare guess achieve glue cigar december fold'",
+    "test": "truffle test"
+  }
+}

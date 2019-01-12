@@ -1,10 +1,11 @@
 pragma solidity 0.4.24;
-pragma experimental ABIEncoderV2;
+//pragma experimental ABIEncoderV2;
 
 import "./Mixins/Pausable.sol";
 
 contract Wallet is Pausable {
-  modifier isPayee(_address) {
+
+  modifier onlyPayee(address _address) {
     require(
       payees[_address].allowed == true,
       "Address is not a Payee"
@@ -12,31 +13,50 @@ contract Wallet is Pausable {
     _;
   }
 
+  modifier enoughBalance(uint _value) {
+    require(
+      address(this).balance >= _value,
+      "Wallet does not have enough ETH"
+    );
+    _;
+  }
+
+  /** @dev Event to log a Deposit has been made.
+   *  @param sender Address of the sender of the deposit.
+   *  @param value Value deposited.
+   */
+  event Deposit(
+      address indexed sender,
+      uint value
+  );
+
   struct Payee {
       bool allowed;
       bool whitelisted;
+      uint lastWithdrawalAt;
   }
 
   mapping (address => Payee) payees;
-  mapping (address => uint) tokens;
+  uint dailyLimit;
 
   constructor(
     address[] _payees,
     bool[] _whitelisted,
-    address[] _tokens,
-    uint[] _dayliLimit
+    uint _dailyLimit
   )
     public
     payable
   {
-    addPayees(_payees, _whitelisted);
-    addERC20tokens(_tokens, _dayliLimit);
-    owner = msg.sender;
+    if(_payees.length > 0) {
+      addPayees(_payees, _whitelisted);
+    }
+
+    dailyLimit = _dailyLimit;
   }
 
   function addPayees(
     address[] _payees,
-    bool[] _whitelisted,
+    bool[] _whitelisted
   )
     public
     onlyOwner
@@ -47,12 +67,7 @@ contract Wallet is Pausable {
     );
 
     for(uint i = 0; i < _payees.length; i++) {
-      Payee memory payee = new Payee({
-            allowed: true,
-            whitelisted: _whitelisted[i];
-      });
-
-      payees[_payees[i]] = payee;
+      addPayee(_payees[i], _whitelisted[i]);
     }
   }
 
@@ -62,58 +77,129 @@ contract Wallet is Pausable {
   )
     public
     onlyOwner
-    isNotPayee
   {
-    payees[_payee] = new Payee({allowed: true, whitelisted: _whitelisted});
+    require(
+      !isPayee(_payee),
+      "Address is already a Payee"
+    );
+    payees[_payee] = Payee({
+      allowed: true,
+      whitelisted: _whitelisted,
+      lastWithdrawalAt: 0
+    });
   }
 
   function removePayee(
-    address _payee,
-    bool _whitelisted
-  )
-    public
-    onlyOwner
-    isPayee(_payee)
-  {
-    payees[_payee].allowed = false;
-    payees[_payee].whitelisted = false;
-  }
-
-  function addERC20tokens(
-    address[] _tokens,
-    uint[] _dayliLimit
+    address _payee
   )
     public
     onlyOwner
   {
     require(
-      _tokens.length == _dayliLimit.length,
-      "Tokens and DayliLimit arrays do not have same length"
+      isPayee(_payee),
+      "Address is not a valid Payee"
     );
 
-    for(uint i = 0; i < _tokens.length; i++) {
-      tokens[_tokens[i]] = _dayliLimit[i];
+    payees[_payee].allowed = false;
+    payees[_payee].whitelisted = false;
+    payees[_payee].lastWithdrawalAt = 0;
+  }
+
+  function whitelistPayee(address _payee)
+    external
+    onlyOwner
+  {
+    require(
+      isPayee(_payee) && !isWhitelisted(_payee),
+      "Address can not be whitelisted"
+    );
+    payees[_payee].whitelisted = true;
+  }
+
+  function blacklistPayee(address _payee)
+    external
+    onlyOwner
+  {
+    require(
+      isPayee(_payee) && isWhitelisted(_payee),
+      "Address can not be blacklisted"
+    );
+    payees[_payee].whitelisted = false;
+  }
+
+  function setDailyLimit(
+    uint _dailyLimit
+  )
+    external
+    onlyOwner
+  {
+    require(dailyLimit != _dailyLimit,
+      "Same dalyLimit can not be set"
+    );
+    dailyLimit = _dailyLimit;
+  }
+
+  function isPayee(address _payee) public view returns(bool) {
+    return payees[_payee].allowed;
+  }
+
+  function isWhitelisted(address _payee) public view returns(bool) {
+    return payees[_payee].whitelisted;
+  }
+
+  function withdrawPayee(uint _value)
+    external
+    onlyPayee(msg.sender)
+    enoughBalance(_value)
+  {
+    require(
+      payeeCanWithdraw(msg.sender,_value),
+      "Payee can not withdraw"
+    );
+
+    address(msg.sender).transfer(_value);
+    payees[msg.sender].lastWithdrawalAt = now;
+  }
+
+  function payeeCanWithdraw(
+    address _payee,
+    uint _value
+  )
+    public view
+    returns(bool)
+  {
+    if(payees[_payee].whitelisted == true) {
+      return true;
     }
+
+    uint withdrawTime = payees[_payee].lastWithdrawalAt + 1 days;
+
+    if(now >= withdrawTime && _value <= dailyLimit) {
+      return true;
+    }
+    return false;
   }
 
-  function addERC20token(
-    address _token,
-    uint _dayliLimit
-  )
-    public
+  function withdrawOwner(uint _value)
+    external
     onlyOwner
+    enoughBalance(_value)
   {
-    tokens[_token] = _dayliLimit;
+    address(msg.sender).transfer(_value);
   }
 
-  function removeERC20token(
-    address _token,
-  )
-    public
-    onlyOwner
-  {
-    tokens[_token] = 0;
+  function kill() external onlyOwner {
+      selfdestruct(owner());
   }
 
+  function() public payable {
+      require(
+        msg.data.length == 0,
+        "Unidentified function signature"
+      );
 
-//VER COMO CONTROLO SI ES PAYYE O NO, sicon modifer, llamada a function o duplicidade de requieres
+      if (msg.value > 0) {
+        emit Deposit(msg.sender, msg.value);
+      }
+  }
+}
