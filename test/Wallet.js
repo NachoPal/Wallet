@@ -9,7 +9,7 @@ const expect = chai.expect;
 
 const WalletArtifacts = artifacts.require("Wallet");
 
-contract('MultiSigWallet', (ACCOUNTS) => {
+contract('Wallet', (ACCOUNTS) => {
 
   const WALLET_OWNER = ACCOUNTS[0];
   const PAYEE_BLACK = ACCOUNTS[1]; //Blacklisted
@@ -280,6 +280,15 @@ contract('MultiSigWallet', (ACCOUNTS) => {
           "Whitelisted payee did not withdraw ETH properly"
         );
       });
+
+      it("should revert if not Payee", async () => {
+        await expect(
+          Wallet.payeeWithdraws(
+            web3.utils.toBN(NEW_DAILY_LIMIT),
+            {from: WALLET_OWNER}
+          )
+        ).to.eventually.be.rejectedWith("revert");
+      });
     });
   });
 
@@ -308,7 +317,7 @@ contract('MultiSigWallet', (ACCOUNTS) => {
       });
 
       it("should revert exceding daily limit", async () => {
-        expect(
+        await expect(
           Wallet.payeeWithdraws(
             web3.utils.toBN(NEW_DAILY_LIMIT + 1),
             {from: PAYEE_BLACK}
@@ -331,7 +340,7 @@ contract('MultiSigWallet', (ACCOUNTS) => {
       });
 
       it("should revert exceding daily limit", async () => {
-        expect(
+        await expect(
           Wallet.payeeWithdraws(
             web3.utils.toBN(NEW_DAILY_LIMIT + 1),
             {from: PAYEE_BLACK}
