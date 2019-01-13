@@ -12,43 +12,68 @@ const WalletArtifacts = artifacts.require("Wallet");
 contract('MultiSigWallet', (ACCOUNTS) => {
 
   const WALLET_OWNER = ACCOUNTS[0];
-  const PAYEE_1 = ACCOUNTS[1]; //Blacklisted
-  const PAYEE_2 = ACCOUNTS[2]; //Whitelisted
+  const PAYEE_BLACK = ACCOUNTS[1]; //Blacklisted
+  const PAYEE_WHITE = ACCOUNTS[2]; //Whitelisted
   const PAYEE_3 = ACCOUNTS[3];
   const PAYEE_4 = ACCOUNTS[4];
   const NOT_OWNER = ACCOUNTS[5];
 
   const DAILY_LIMIT = 1000000000000000000; //1 ETH
   const NEW_DAILY_LIMIT = 2000000000000000000; //2 ETH
-  const DEPOSIT = NEW_DAILY_LIMIT * 5; //10 ETH
+  const DEPOSIT = NEW_DAILY_LIMIT * 10; //20 ETH
+
+  const ONE_DAY = 24 * 60 * 60 * 1000;
 
   let Wallet;
+  let timeTravel;
 
   before("Contracts instances", async () => {
     Wallet = await WalletArtifacts.deployed();
+
+    timeTravel = function(time) {
+      return new Promise((resolve, reject) => {
+          web3.currentProvider.send({
+          jsonrpc: "2.0",
+          method: "evm_increaseTime",
+          params: [time],
+          id: new Date().getSeconds()
+        }, (err, result) => {
+          if(err){ return reject(err) }
+          return resolve(result)
+        });
+      });
+    };
   });
 
   describe("Deployment", () => {
     it("should initialize the payees", async () => {
-      const payee1 = await Wallet.payees(PAYEE_1);
-      const payee2 = await Wallet.payees(PAYEE_2);
+      const payee1 = await Wallet.payees(PAYEE_BLACK);
+      const payee2 = await Wallet.payees(PAYEE_WHITE);
 
       assert.deepEqual(
-        {allowed: true, whitelisted: false, lastWithdrawalAt: web3.utils.toBN(0)},
+        {
+          allowed: true,
+          whitelisted: false,
+          firstDailyWithdrawalTime: web3.utils.toBN(0)
+        },
         {
           allowed: payee1.allowed,
           whitelisted: payee1.whitelisted,
-          lastWithdrawalAt: payee1.lastWithdrawalAt
+          firstDailyWithdrawalTime: payee1.firstDailyWithdrawalTime
         },
         "Payee1 was not stored properly"
       );
 
       assert.deepEqual(
-        {allowed: true, whitelisted: true, lastWithdrawalAt: web3.utils.toBN(0)},
+        {
+          allowed: true,
+          whitelisted: true,
+          firstDailyWithdrawalTime: web3.utils.toBN(0)
+        },
         {
           allowed: payee2.allowed,
           whitelisted: payee2.whitelisted,
-          lastWithdrawalAt: payee2.lastWithdrawalAt
+          firstDailyWithdrawalTime: payee2.firstDailyWithdrawalTime
         },
         "Payee2 was not stored properly"
       );
@@ -78,21 +103,21 @@ contract('MultiSigWallet', (ACCOUNTS) => {
         const payee4 = await Wallet.payees(PAYEE_4);
 
         assert.deepEqual(
-          {allowed: true, whitelisted: true, lastWithdrawalAt: web3.utils.toBN(0)},
+          {allowed: true, whitelisted: true, firstDailyWithdrawalTime: web3.utils.toBN(0)},
           {
             allowed: payee3.allowed,
             whitelisted: payee3.whitelisted,
-            lastWithdrawalAt: payee3.lastWithdrawalAt
+            firstDailyWithdrawalTime: payee3.firstDailyWithdrawalTime
           },
           "Payee3 was not stored properly"
         );
 
         assert.deepEqual(
-          {allowed: true, whitelisted: false, lastWithdrawalAt: web3.utils.toBN(0)},
+          {allowed: true, whitelisted: false, firstDailyWithdrawalTime: web3.utils.toBN(0)},
           {
             allowed: payee4.allowed,
             whitelisted: payee4.whitelisted,
-            lastWithdrawalAt: payee4.lastWithdrawalAt
+            firstDailyWithdrawalTime: payee4.firstDailyWithdrawalTime
           },
           "Payee4 was not stored properly"
         );
@@ -131,7 +156,7 @@ contract('MultiSigWallet', (ACCOUNTS) => {
 
       it("should revert if not Owner", async () => {
         await expect(
-          Wallet.whitelistPayee(PAYEE_1, {from: NOT_OWNER})
+          Wallet.whitelistPayee(PAYEE_BLACK, {from: NOT_OWNER})
         ).to.eventually.be.rejectedWith("revert");
       });
     });
@@ -152,7 +177,7 @@ contract('MultiSigWallet', (ACCOUNTS) => {
 
       it("should revert if not Owner", async () => {
         await expect(
-          Wallet.blacklistPayee(PAYEE_2, {from: NOT_OWNER})
+          Wallet.blacklistPayee(PAYEE_WHITE, {from: NOT_OWNER})
         ).to.eventually.be.rejectedWith("revert");
       });
     });
@@ -163,11 +188,11 @@ contract('MultiSigWallet', (ACCOUNTS) => {
         const payee4 = await Wallet.payees(PAYEE_4);
 
         assert.deepEqual(
-          {allowed: false, whitelisted: false, lastWithdrawalAt: web3.utils.toBN(0)},
+          {allowed: false, whitelisted: false, firstDailyWithdrawalTime: web3.utils.toBN(0)},
           {
             allowed: payee4.allowed,
             whitelisted: payee4.whitelisted,
-            lastWithdrawalAt: payee4.lastWithdrawalAt
+            firstDailyWithdrawalTime: payee4.firstDailyWithdrawalTime
           },
           "Payee4 was not removed properly"
         );
@@ -181,7 +206,7 @@ contract('MultiSigWallet', (ACCOUNTS) => {
 
       it("should revert if not Owner", async () => {
         await expect(
-          Wallet.removePayee(PAYEE_1, {from: NOT_OWNER})
+          Wallet.removePayee(PAYEE_BLACK, {from: NOT_OWNER})
         ).to.eventually.be.rejectedWith("revert");
       });
     });
@@ -240,14 +265,14 @@ contract('MultiSigWallet', (ACCOUNTS) => {
   describe("Payee - Whitelisted", () => {
     describe("#payeeWithdraws", () => {
       it("should withdraw more than daily limit from wallet", async () => {
-        initialWalletBalance = await web3.eth.getBalance(Wallet.address);
+        const  initialWalletBalance = await web3.eth.getBalance(Wallet.address);
 
         await Wallet.payeeWithdraws(
           web3.utils.toBN(NEW_DAILY_LIMIT * 2),
-          {from: PAYEE_2}
+          {from: PAYEE_WHITE}
         );
 
-        finalWalletBalance = await web3.eth.getBalance(Wallet.address);
+        const finalWalletBalance = await web3.eth.getBalance(Wallet.address);
 
         assert.deepEqual(
           initialWalletBalance - finalWalletBalance,
@@ -255,14 +280,63 @@ contract('MultiSigWallet', (ACCOUNTS) => {
           "Whitelisted payee did not withdraw ETH properly"
         );
       });
+    });
+  });
 
-      it("should revert if blacklisted payee tries to exceed daily limit", async () => {
+  describe("Payee - Blacklisted", () => {
+    describe("#payeeWithdraws", () => {
+      it("should withdraw daily limit from wallet", async () => {
+        const initialWalletBalance = await web3.eth.getBalance(Wallet.address);
+
+        await Wallet.payeeWithdraws(
+          web3.utils.toBN(NEW_DAILY_LIMIT / 2),
+          {from: PAYEE_BLACK}
+        );
+
+        await Wallet.payeeWithdraws(
+          web3.utils.toBN(NEW_DAILY_LIMIT / 2),
+          {from: PAYEE_BLACK}
+        );
+
+        const finalWalletBalance = await web3.eth.getBalance(Wallet.address);
+
+        assert.deepEqual(
+          initialWalletBalance - finalWalletBalance,
+          NEW_DAILY_LIMIT,
+          "Whitelisted payee did not withdraw ETH properly"
+        );
+      });
+
+      it("should revert exceding daily limit", async () => {
         expect(
           Wallet.payeeWithdraws(
-            web3.utils.toBN(NEW_DAILY_LIMIT * 2),
-            {from: PAYEE_1}
+            web3.utils.toBN(NEW_DAILY_LIMIT + 1),
+            {from: PAYEE_BLACK}
           )
-        ).to.eventually.be.rejectedWith("revert");
+        ).to.eventually.be.rejectedWith("revert")
+      });
+
+      it("should withdraw after one day has passed", async () => {
+        timeTravel((Date.now() + ONE_DAY)/1000);
+
+        await Wallet.payeeWithdraws(
+          web3.utils.toBN(NEW_DAILY_LIMIT / 2),
+          {from: PAYEE_BLACK}
+        );
+
+        await Wallet.payeeWithdraws(
+          web3.utils.toBN(NEW_DAILY_LIMIT / 2),
+          {from: PAYEE_BLACK}
+        );
+      });
+
+      it("should revert exceding daily limit", async () => {
+        expect(
+          Wallet.payeeWithdraws(
+            web3.utils.toBN(NEW_DAILY_LIMIT + 1),
+            {from: PAYEE_BLACK}
+          )
+        ).to.eventually.be.rejectedWith("revert")
       });
     });
   });

@@ -1,5 +1,5 @@
 pragma solidity 0.4.24;
-//pragma experimental ABIEncoderV2;
+pragma experimental ABIEncoderV2;
 
 import "./Mixins/Pausable.sol";
 
@@ -33,7 +33,13 @@ contract Wallet is Pausable {
   struct Payee {
       bool allowed;
       bool whitelisted;
-      uint lastWithdrawalAt;
+      uint firstDailyWithdrawalTime;
+      uint dailySpent;
+  }
+
+  struct Withdrawal {
+      bool allowed;
+      bool dailyUpdate;
   }
 
   mapping (address => Payee) public payees;
@@ -85,7 +91,8 @@ contract Wallet is Pausable {
     payees[_payee] = Payee({
       allowed: true,
       whitelisted: _whitelisted,
-      lastWithdrawalAt: 0
+      firstDailyWithdrawalTime: 0,
+      dailySpent: 0
     });
   }
 
@@ -102,7 +109,8 @@ contract Wallet is Pausable {
 
     payees[_payee].allowed = false;
     payees[_payee].whitelisted = false;
-    payees[_payee].lastWithdrawalAt = 0;
+    payees[_payee].firstDailyWithdrawalTime = 0;
+    payees[_payee].dailySpent = 0;
   }
 
   function whitelistPayee(address _payee)
@@ -152,32 +160,64 @@ contract Wallet is Pausable {
     onlyPayee(msg.sender)
     enoughBalance(_value)
   {
-    require(
-      payeeCanWithdraw(msg.sender,_value),
-      "Payee can not withdraw"
-    );
+    if(payees[msg.sender].whitelisted == true) {
+      address(msg.sender).transfer(_value);
+    } else {
+      Withdrawal memory withdrawalState = payeeWithdrawalState(msg.sender,_value);
+      require(
+        withdrawalState.allowed,
+        "Payee is not allowed to withdraw"
+      );
 
-    address(msg.sender).transfer(_value);
-    payees[msg.sender].lastWithdrawalAt = now;
+      if(withdrawalState.dailyUpdate) {
+        payees[msg.sender].firstDailyWithdrawalTime = now;
+        payees[msg.sender].dailySpent = _value;
+      } else {
+          payees[msg.sender].dailySpent += _value;
+      }
+      address(msg.sender).transfer(_value);
+    }
   }
 
-  function payeeCanWithdraw(
+  function payeeWithdrawalState(
     address _payee,
     uint _value
   )
-    public view
-    returns(bool)
+    internal view
+    returns(Withdrawal)
   {
-    if(payees[_payee].whitelisted == true) {
-      return true;
-    }
+    uint allowedWithdrawalTime = payees[_payee].firstDailyWithdrawalTime + 1 days;
+    uint remainingAmount = dailyLimit - payees[_payee].dailySpent;
 
-    uint withdrawTime = payees[_payee].lastWithdrawalAt + 1 days;
-
-    if(now >= withdrawTime && _value <= dailyLimit) {
-      return true;
+    if(now >= allowedWithdrawalTime) { //24h have passed since first daily withdrawal
+      if(_value <= dailyLimit) {
+        return getWithdrawalState(true, true);
+      } else {
+          return getWithdrawalState(false, false);
+      }
+    } else { //24h have not passed since first daily withdrawal
+        if(_value <= remainingAmount) {
+          return getWithdrawalState(true, false);
+        } else {
+            return getWithdrawalState(false, false);
+        }
     }
-    return false;
+  }
+
+  function getWithdrawalState(
+    bool _allowed,
+    bool _dailyUpdate
+  )
+    internal
+    constant
+    returns(Withdrawal)
+  {
+    Withdrawal memory withdrawalState = Withdrawal({
+      allowed: _allowed,
+      dailyUpdate: _dailyUpdate
+    });
+
+    return withdrawalState;
   }
 
   function ownerWithdraws(uint _value)
