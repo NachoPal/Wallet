@@ -1,4 +1,5 @@
 var Wallet = artifacts.require("./Wallet.sol");
+const DAILY_LIMIT = 1000000000000000000; // 1 ETH
 
 module.exports = function(deployer) {
   deployer.deploy(
@@ -8,7 +9,6 @@ module.exports = function(deployer) {
       "0xf204b4b3b0a4656e8e818d6c051679162f426999"
     ],
     [false, true],
-    100000000000000,
-    {value: 100000000000000000}
+    web3.utils.toBN(DAILY_LIMIT)
   );
 };

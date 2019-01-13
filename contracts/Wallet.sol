@@ -36,8 +36,8 @@ contract Wallet is Pausable {
       uint lastWithdrawalAt;
   }
 
-  mapping (address => Payee) payees;
-  uint dailyLimit;
+  mapping (address => Payee) public payees;
+  uint public dailyLimit;
 
   constructor(
     address[] _payees,
@@ -147,7 +147,7 @@ contract Wallet is Pausable {
     return payees[_payee].whitelisted;
   }
 
-  function withdrawPayee(uint _value)
+  function payeeWithdraws(uint _value)
     external
     onlyPayee(msg.sender)
     enoughBalance(_value)
@@ -180,7 +180,7 @@ contract Wallet is Pausable {
     return false;
   }
 
-  function withdrawOwner(uint _value)
+  function ownerWithdraws(uint _value)
     external
     onlyOwner
     enoughBalance(_value)
