@@ -139,6 +139,30 @@ contract('Wallet', (ACCOUNTS) => {
           Wallet.addPayee(PAYEE_4, {from: WALLET_OWNER})
         ).to.eventually.be.rejectedWith("revert");
       });
+
+      it("should write the LOG - PayeeAdded", async () => {
+        var logs = await web3.eth.getPastLogs({
+          fromBlock: 1,
+          address: Wallet.address,
+          topics: [
+            web3.eth.abi.encodeEventSignature(
+              getAbiByFunctionNames(Wallet.abi)["PayeeAdded"]
+            )
+          ]
+        });
+
+        var decodedLogs = web3.eth.abi.decodeLog(
+          getAbiByFunctionNames(Wallet.abi)["PayeeAdded"].inputs,
+          logs[0].data,
+          _.drop(logs[0].topics)
+        );
+
+        assert.deepEqual(
+          {payee: decodedLogs.payee},
+          {payee: PAYEE_BLACK},
+          "Event was not emitted properly"
+        );
+      });
     });
     describe("#whitelistPayee", () => {
       it("should whitelist a payee", async () => {
@@ -158,6 +182,30 @@ contract('Wallet', (ACCOUNTS) => {
         await expect(
           Wallet.whitelistPayee(PAYEE_BLACK, {from: NOT_OWNER})
         ).to.eventually.be.rejectedWith("revert");
+      });
+
+      it("should write the LOG - PayeeWhitelisted", async () => {
+        var logs = await web3.eth.getPastLogs({
+          fromBlock: 1,
+          address: Wallet.address,
+          topics: [
+            web3.eth.abi.encodeEventSignature(
+              getAbiByFunctionNames(Wallet.abi)["PayeeWhitelisted"]
+            )
+          ]
+        });
+
+        var decodedLogs = web3.eth.abi.decodeLog(
+          getAbiByFunctionNames(Wallet.abi)["PayeeWhitelisted"].inputs,
+          logs[0].data,
+          _.drop(logs[0].topics)
+        );
+
+        assert.deepEqual(
+          {payee: decodedLogs.payee},
+          {payee: PAYEE_4},
+          "Event was not emitted properly"
+        );
       });
     });
 
@@ -179,6 +227,30 @@ contract('Wallet', (ACCOUNTS) => {
         await expect(
           Wallet.blacklistPayee(PAYEE_WHITE, {from: NOT_OWNER})
         ).to.eventually.be.rejectedWith("revert");
+      });
+
+      it("should write the LOG - PayeeBlacklisted", async () => {
+        var logs = await web3.eth.getPastLogs({
+          fromBlock: 1,
+          address: Wallet.address,
+          topics: [
+            web3.eth.abi.encodeEventSignature(
+              getAbiByFunctionNames(Wallet.abi)["PayeeBlacklisted"]
+            )
+          ]
+        });
+
+        var decodedLogs = web3.eth.abi.decodeLog(
+          getAbiByFunctionNames(Wallet.abi)["PayeeBlacklisted"].inputs,
+          logs[0].data,
+          _.drop(logs[0].topics)
+        );
+
+        assert.deepEqual(
+          {payee: decodedLogs.payee},
+          {payee: PAYEE_4},
+          "Event was not emitted properly"
+        );
       });
     });
 
@@ -208,6 +280,30 @@ contract('Wallet', (ACCOUNTS) => {
         await expect(
           Wallet.removePayee(PAYEE_BLACK, {from: NOT_OWNER})
         ).to.eventually.be.rejectedWith("revert");
+      });
+
+      it("should write the LOG - PayeeRemoved", async () => {
+        var logs = await web3.eth.getPastLogs({
+          fromBlock: 1,
+          address: Wallet.address,
+          topics: [
+            web3.eth.abi.encodeEventSignature(
+              getAbiByFunctionNames(Wallet.abi)["PayeeRemoved"]
+            )
+          ]
+        });
+
+        var decodedLogs = web3.eth.abi.decodeLog(
+          getAbiByFunctionNames(Wallet.abi)["PayeeRemoved"].inputs,
+          logs[0].data,
+          _.drop(logs[0].topics)
+        );
+
+        assert.deepEqual(
+          {payee: decodedLogs.payee},
+          {payee: PAYEE_4},
+          "Event was not emitted properly"
+        );
       });
     });
 
@@ -241,6 +337,30 @@ contract('Wallet', (ACCOUNTS) => {
           )
         ).to.eventually.be.rejectedWith("revert");
       });
+
+      it("should write the LOG - DailyLimitChanged", async () => {
+        var logs = await web3.eth.getPastLogs({
+          fromBlock: 1,
+          address: Wallet.address,
+          topics: [
+            web3.eth.abi.encodeEventSignature(
+              getAbiByFunctionNames(Wallet.abi)["DailyLimitChanged"]
+            )
+          ]
+        });
+
+        var decodedLogs = web3.eth.abi.decodeLog(
+          getAbiByFunctionNames(Wallet.abi)["DailyLimitChanged"].inputs,
+          logs[0].data,
+          _.drop(logs[0].topics)
+        );
+
+        assert.deepEqual(
+          {dailyLimit: Number(decodedLogs.dailyLimit)},
+          {dailyLimit: NEW_DAILY_LIMIT},
+          "Event was not emitted properly"
+        );
+      });
     });
 
     describe("#deposit (fallback)", () => {
@@ -257,6 +377,30 @@ contract('Wallet', (ACCOUNTS) => {
           DEPOSIT * 2,
           walletBalance,
           "ETH was not deposited properly"
+        );
+      });
+
+      it("should write the LOG - Deposit", async () => {
+        var logs = await web3.eth.getPastLogs({
+          fromBlock: 1,
+          address: Wallet.address,
+          topics: [
+            web3.eth.abi.encodeEventSignature(
+              getAbiByFunctionNames(Wallet.abi)["Deposit"]
+            )
+          ]
+        });
+
+        var decodedLogs = web3.eth.abi.decodeLog(
+          getAbiByFunctionNames(Wallet.abi)["Deposit"].inputs,
+          logs[0].data,
+          _.drop(logs[0].topics)
+        );
+
+        assert.deepEqual(
+          {value: Number(decodedLogs.value)},
+          {value: DEPOSIT * 2},
+          "Event was not emitted properly"
         );
       });
     });
@@ -287,6 +431,30 @@ contract('Wallet', (ACCOUNTS) => {
           )
         ).to.eventually.be.rejectedWith("revert");
       });
+
+      it("should write the LOG - OwnerWhitdrawal", async () => {
+        var logs = await web3.eth.getPastLogs({
+          fromBlock: 1,
+          address: Wallet.address,
+          topics: [
+            web3.eth.abi.encodeEventSignature(
+              getAbiByFunctionNames(Wallet.abi)["OwnerWhitdrawal"]
+            )
+          ]
+        });
+
+        var decodedLogs = web3.eth.abi.decodeLog(
+          getAbiByFunctionNames(Wallet.abi)["OwnerWhitdrawal"].inputs,
+          logs[0].data,
+          _.drop(logs[0].topics)
+        );
+
+        assert.deepEqual(
+          {value: Number(decodedLogs.value)},
+          {value: DEPOSIT},
+          "Event was not emitted properly"
+        );
+      });
     });
   });
 
@@ -316,6 +484,30 @@ contract('Wallet', (ACCOUNTS) => {
             {from: WALLET_OWNER}
           )
         ).to.eventually.be.rejectedWith("revert");
+      });
+
+      it("should write the LOG - PayeeWithdrawal", async () => {
+        var logs = await web3.eth.getPastLogs({
+          fromBlock: 1,
+          address: Wallet.address,
+          topics: [
+            web3.eth.abi.encodeEventSignature(
+              getAbiByFunctionNames(Wallet.abi)["PayeeWithdrawal"]
+            )
+          ]
+        });
+
+        var decodedLogs = web3.eth.abi.decodeLog(
+          getAbiByFunctionNames(Wallet.abi)["PayeeWithdrawal"].inputs,
+          logs[0].data,
+          _.drop(logs[0].topics)
+        );
+
+        assert.deepEqual(
+          {payee: decodedLogs.payee, value: Number(decodedLogs.value)},
+          {payee: PAYEE_WHITE, value: NEW_DAILY_LIMIT * 2},
+          "Event was not emitted properly"
+        );
       });
     });
   });
