@@ -2,8 +2,11 @@ pragma solidity 0.4.24;
 pragma experimental ABIEncoderV2;
 
 import "./Mixins/Pausable.sol";
+import "./Mixins/SafeMath.sol";
 
 contract Wallet is Pausable {
+
+  using SafeMath for uint256;
 
   modifier onlyPayee(address _address) {
     require(
@@ -20,6 +23,14 @@ contract Wallet is Pausable {
     );
     _;
   }
+
+  event PayeeAdded(address payee);
+  event PayeeRemoved(address payee);
+  event PayeeWhitelisted(address payee);
+  event PayeeBlacklisted(address payee);
+  event DailyLimitChanged(uint dailyLimit);
+  event PayeeWithdrawal(address indexed payee, uint value);
+  event OwnerWhitdrawal(uint value);
 
   /** @dev Event to log a Deposit has been made.
    *  @param sender Address of the sender of the deposit.
@@ -88,12 +99,15 @@ contract Wallet is Pausable {
       !isPayee(_payee),
       "Address is already a Payee"
     );
+
     payees[_payee] = Payee({
       allowed: true,
       whitelisted: _whitelisted,
       firstDailyWithdrawalTime: 0,
       dailySpent: 0
     });
+
+    emit PayeeAdded(_payee);
   }
 
   function removePayee(
@@ -111,6 +125,8 @@ contract Wallet is Pausable {
     payees[_payee].whitelisted = false;
     payees[_payee].firstDailyWithdrawalTime = 0;
     payees[_payee].dailySpent = 0;
+
+    emit PayeeRemoved(_payee);
   }
 
   function whitelistPayee(address _payee)
@@ -122,6 +138,8 @@ contract Wallet is Pausable {
       "Address can not be whitelisted"
     );
     payees[_payee].whitelisted = true;
+
+    emit PayeeWhitelisted(_payee);
   }
 
   function blacklistPayee(address _payee)
@@ -133,6 +151,8 @@ contract Wallet is Pausable {
       "Address can not be blacklisted"
     );
     payees[_payee].whitelisted = false;
+
+    emit PayeeBlacklisted(_payee);
   }
 
   function setDailyLimit(
@@ -145,6 +165,7 @@ contract Wallet is Pausable {
       "Same dalyLimit can not be set"
     );
     dailyLimit = _dailyLimit;
+    emit DailyLimitChanged(_dailyLimit);
   }
 
   function isPayee(address _payee) public view returns(bool) {
@@ -162,6 +183,7 @@ contract Wallet is Pausable {
   {
     if(payees[msg.sender].whitelisted == true) {
       address(msg.sender).transfer(_value);
+      emit PayeeWithdrawal(msg.sender, _value);
     } else {
       Withdrawal memory withdrawalState = payeeWithdrawalState(msg.sender,_value);
       require(
@@ -176,6 +198,7 @@ contract Wallet is Pausable {
           payees[msg.sender].dailySpent += _value;
       }
       address(msg.sender).transfer(_value);
+      emit PayeeWithdrawal(msg.sender, _value);
     }
   }
 
@@ -187,7 +210,13 @@ contract Wallet is Pausable {
     returns(Withdrawal)
   {
     uint allowedWithdrawalTime = payees[_payee].firstDailyWithdrawalTime + 1 days;
-    uint remainingAmount = dailyLimit - payees[_payee].dailySpent;
+    uint remainingAmount;
+
+    if(dailyLimit > payees[_payee].dailySpent) {
+      remainingAmount = dailyLimit - payees[_payee].dailySpent;
+    } else { //Might happen if dailyLimit has been reduced
+      remainingAmount = 0;
+    }
 
     if(now >= allowedWithdrawalTime) { //24h have passed since first daily withdrawal
       if(_value <= dailyLimit) {
@@ -209,7 +238,7 @@ contract Wallet is Pausable {
     bool _dailyUpdate
   )
     internal
-    constant
+    pure
     returns(Withdrawal)
   {
     Withdrawal memory withdrawalState = Withdrawal({
@@ -223,9 +252,9 @@ contract Wallet is Pausable {
   function ownerWithdraws(uint _value)
     external
     onlyOwner
-    enoughBalance(_value)
   {
     address(msg.sender).transfer(_value);
+    emit OwnerWhitdrawal(_value);
   }
 
   function kill() external onlyOwner {

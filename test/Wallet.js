@@ -22,7 +22,7 @@ contract('Wallet', (ACCOUNTS) => {
   const NEW_DAILY_LIMIT = 2000000000000000000; //2 ETH
   const DEPOSIT = NEW_DAILY_LIMIT * 10; //20 ETH
 
-  const ONE_DAY = 24 * 60 * 60 * 1000;
+  const ONE_DAY = 24 * 60 * 60 * 1000; //Miliseconds
 
   let Wallet;
   let timeTravel;
@@ -248,16 +248,44 @@ contract('Wallet', (ACCOUNTS) => {
         await web3.eth.sendTransaction({
           from: WALLET_OWNER,
           to: Wallet.address,
-          value: web3.utils.toBN(DEPOSIT)
+          value: web3.utils.toBN(DEPOSIT * 2)
         });
 
         const walletBalance = await web3.eth.getBalance(Wallet.address);
 
         assert.equal(
-          DEPOSIT,
+          DEPOSIT * 2,
           walletBalance,
           "ETH was not deposited properly"
         );
+      });
+    });
+
+    describe("#ownerWithdraws", () => {
+      it("should withdraw ETH from Wallet", async () => {
+        const initialWalletBalance = await web3.eth.getBalance(Wallet.address);
+
+        await Wallet.ownerWithdraws(
+          web3.utils.toBN(DEPOSIT),
+          {from: WALLET_OWNER}
+        );
+
+        const finalWalletBalance = await web3.eth.getBalance(Wallet.address);
+
+        assert.deepEqual(
+          initialWalletBalance - DEPOSIT,
+          Number(finalWalletBalance),
+          "Owner did not withdraw ETH properly"
+        );
+      });
+
+      it("should revert if not Owner", async () => {
+        await expect(
+          Wallet.ownerWithdraws(
+            web3.utils.toBN(DEPOSIT),
+            {from: PAYEE_3}
+          )
+        ).to.eventually.be.rejectedWith("revert");
       });
     });
   });
@@ -332,20 +360,37 @@ contract('Wallet', (ACCOUNTS) => {
           web3.utils.toBN(NEW_DAILY_LIMIT / 2),
           {from: PAYEE_BLACK}
         );
+      });
+
+      it("should revert exceding a lower new daily limit", async () => {
+        await Wallet.setDailyLimit(
+          web3.utils.toBN(NEW_DAILY_LIMIT / 4), {from: WALLET_OWNER}
+        );
+
+        await expect(
+          Wallet.payeeWithdraws(
+            web3.utils.toBN(NEW_DAILY_LIMIT / 2),
+            {from: PAYEE_BLACK}
+          )
+        ).to.eventually.be.rejectedWith("revert")
+      });
+
+      it("should withdraw again after one day has passed", async () => {
+        timeTravel((Date.now() + ONE_DAY)/1000);
 
         await Wallet.payeeWithdraws(
-          web3.utils.toBN(NEW_DAILY_LIMIT / 2),
+          web3.utils.toBN(NEW_DAILY_LIMIT / 4),
           {from: PAYEE_BLACK}
         );
       });
 
-      it("should revert exceding daily limit", async () => {
+      it("should revert again exceding the new daily limit", async () => {
         await expect(
           Wallet.payeeWithdraws(
-            web3.utils.toBN(NEW_DAILY_LIMIT + 1),
+            web3.utils.toBN(1),
             {from: PAYEE_BLACK}
           )
-        ).to.eventually.be.rejectedWith("revert")
+        ).to.eventually.be.rejectedWith("revert");
       });
     });
   });
