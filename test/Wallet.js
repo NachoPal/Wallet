@@ -22,7 +22,7 @@ contract('Wallet', (ACCOUNTS) => {
   const NEW_DAILY_LIMIT = 2000000000000000000; //2 ETH
   const DEPOSIT = NEW_DAILY_LIMIT * 10; //20 ETH
 
-  const ONE_DAY = 24 * 60 * 60 * 1000; //Miliseconds
+  const ONE_DAY = 24 * 60 * 60; //Seconds per Day
 
   let Wallet;
   let timeTravel;
@@ -539,14 +539,14 @@ contract('Wallet', (ACCOUNTS) => {
       it("should revert exceding daily limit", async () => {
         await expect(
           Wallet.payeeWithdraws(
-            web3.utils.toBN(NEW_DAILY_LIMIT + 1),
+            web3.utils.toBN(1),
             {from: PAYEE_BLACK}
           )
         ).to.eventually.be.rejectedWith("revert")
       });
 
       it("should withdraw after one day has passed", async () => {
-        timeTravel((Date.now() + ONE_DAY)/1000);
+        timeTravel(ONE_DAY);
 
         await Wallet.payeeWithdraws(
           web3.utils.toBN(NEW_DAILY_LIMIT / 2),
@@ -568,7 +568,7 @@ contract('Wallet', (ACCOUNTS) => {
       });
 
       it("should withdraw again after one day has passed", async () => {
-        timeTravel((Date.now() + ONE_DAY)/1000);
+        timeTravel(ONE_DAY);
 
         await Wallet.payeeWithdraws(
           web3.utils.toBN(NEW_DAILY_LIMIT / 4),
