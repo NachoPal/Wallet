@@ -10,7 +10,7 @@
 
 
 # Assumptions
-1. Daily limit works in periods of 24 hours not in function of calendar days.
+1. Daily limit works in periods of 24 hours, not in function of calendar days.
 
 2. All payees have the same daily limit.
 
